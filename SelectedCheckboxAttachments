@@ -1,0 +1,39 @@
+<lightning-input 
+        class="all-checkbox" 
+        data-id={attactment.cd.FileType} 
+        type="checkbox" 
+        name={attactment.fileSource} 
+        label={attactment.cd.Title} 
+        variant="label-hidden" 
+        value={attactment.cd.Id} 
+        onchange={handleChange}
+></lightning-input>
+
+
+/**
+ * @description: Selected all Attachments and send to parent
+ * @param {*} event 
+ */
+handleChange(event) {
+    let selectedAttachments = [];
+    [...this.template.querySelectorAll('.all-checkbox')].forEach(input => {
+        if (input.checked) {
+            selectedAttachments.push({ recordId: input.value,
+                                       values: input.label,
+                                       description: input.name,
+                                    });
+        }
+    });
+    this.notifyParentComponent(selectedAttachments);
+}
+
+
+/**
+ * @description: Custom event to send selected all Attachments to parent
+ * @param {*} attachment 
+ */
+notifyParentComponent(attachment) {
+    this.dispatchEvent(new CustomEvent('selectedattachment', {
+        detail: { attachment }
+    }));
+}
