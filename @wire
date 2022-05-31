@@ -1,0 +1,78 @@
+Wire a property : 
+
+  //below code will wire list of Account data  
+  @wire(getAccounts) wiredAccounts;
+-----------------------------------------------
+Wire a function : 
+
+     @track lstaccounts;
+     @track error;
+
+     //below code will be used as a function
+     @wire(getAccounts) wiredAccounts ({ error, data }) {
+         if (data) {
+             this.lstaccounts = data;
+         } else if (error) {
+             this.error = error;
+         }
+     }
+ ------------------------------------------
+ Wire with dynamic Parameters :
+- A parameter with $ to indicate that it’s dynamic and reactive. 
+- It refers to a property of the component instance. 
+- If its value changes, the template rerenders.
+
+@track strName;
+//using @wire with dynamic parameters
+@wire(getFilteredAccounts,{strName: ‘$strName’}) wiredAccounts ({ error, data }) {
+     if (data) {
+         this.lstaccounts = data;
+     }else if (error) {
+         this.error = error;
+      }
+ }
+ 
+ -------------------------------------
+Wire to refresh :
+  It can also be used in a scenario where you need to refresh your data on an action
+
+      afterUpdate(){
+           getUpdatedAccounts({param1: this.param1})
+           .then(result => {
+          //below code will be use to refresh the wiredAccounts  
+             refreshApex(this.wiredAccounts);
+           }).catch(error => {
+               this.error = error;
+           });
+       }
+---------------------------------------------
+Reuse apex calls without @wire : 
+- @wire accepts defined adapters. 
+- If you wish to reuse the apex calling we can do it using connected callbacks.
+- Connected callbacks are called when the element is inserted into the DOM. 
+- It is generally used when we want our code to run only one time, to prevent it from running twice. 
+- For example: when you hit the save button multiple times then your record will get saved multiple time because your code will run multiple times. 
+
+In that case, you need to use the following snippet syntax :
+
+//below code will be used to reuse apex calls without wire
+    connectedCallback() {
+       this.applyFilter();
+   }
+   applyFilter(){
+       getFilteredAccounts({strName: this.strName}).then(result => {
+           this.lstaccounts = result;
+       }).catch(error => {
+           this.error = error;
+       });
+   }
+
+--------------------------------------------------
+Few things to keep in mind :
+      To use apex methods via @wire, you must annotate it with cacheable=true.
+      Assess your use case properly before deciding to use @wire
+      - Check if, Base Lightning component, like lightning-record-form, lightning-record-view-form, or lightning-record-edit-form can be used
+      - If not, check for @wire Adapters and functions
+      - If both the above don’t serve the purpose, you can write apex code
+      @wire is a reactive service. When the wire service provisions data, the component re-renders. if you want it to be fired on-demand, then it's better to go with the imperative approach.
+      Wire Adapters are beyond the apex. Here are few lightning/ui*Api Wire Adapters and Functions to work with Salesforce data and metadata references :
