@@ -1,0 +1,21 @@
+/**
+     * @description : This method is used to navigate to View Account Page.
+     * @param {event} event
+    */
+    cancelButton(event) {
+        this.navigateToViewAccountPage();
+    }
+
+    /**
+     * @description This method is used to Navigate to View Account Page
+    */
+    navigateToViewAccountPage() {
+        window.location.href = `/${this.accountRecordId}`;
+        /* this[NavigationMixin.Navigate]({
+            type: 'standard__recordPage',
+            attributes: {
+                recordId: this.accountRecordId,
+                actionName: 'view'
+            },
+        }); */
+    }
