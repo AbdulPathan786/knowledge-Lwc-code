@@ -1,0 +1,12 @@
+handleInputValueChange(event) {
+    this.fireEventANdNotifyParent();
+}
+
+/**
+ * @description: This method is used to fire event and notify parent.
+ */
+fireEventANdNotifyParent() {
+    this.dispatchEvent(new CustomEvent('update', {
+        detail: { componentIndex: this.componentIndex, bankStatement: this.bankStatementData } // enter right value
+    }));
+}
