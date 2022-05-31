@@ -1,14 +1,14 @@
-this.showNotification('Success', 'Records have been upserted successfully.', 'success')
+ this.showNotification('Success', 'Records have been upserted successfully.', 'success')
 
-this.showNotification('Error', (error.body.message || error.message), 'error');
+ this.showNotification('Error', (error.body.message || error.message), 'error');
 
 
  /**
-     * @description : This method is used to show the notification.
-     * @param {String} title : Title of the notification
-     * @param {String} message : Message of the notification
-     * @param {String} variant : Variant of the notification
-    */
-    showNotification(title, message, variant) {
-        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
-    }
+* @description : This method is used to show the notification.
+* @param {String} title : Title of the notification
+* @param {String} message : Message of the notification
+* @param {String} variant : Variant of the notification
+*/
+  showNotification(title, message, variant) {
+      this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
+  }
