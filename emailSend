@@ -1,0 +1,33 @@
+// email send
+
+List<ContentVersion> contentVersionList = new List<ContentVersion>([  SELECT Title, PathOnClient, FileType, VersionDataFROM ContentVersion 
+                                                                      WHERE ContentDocumentId IN: RecordId ]);
+
+List<Messaging.EmailFileAttachment> emailFileAttachments = new List<Messaging.EmailFileAttachment>();
+  for (ContentVersion cv : contentVersionList) {
+      Messaging.EmailFileAttachment efa = new Messaging.EmailFileAttachment();
+      efa.setFileName(cv.Title + '.' + cv.FileType);
+      efa.setBody(cv.VersionData);
+      emailFileAttachments.add(efa);
+  }
+
+  String[] toAddresses = new String[] {};
+      for (String email : obj.email.split(',')){
+          toAddresses.add(email.trim());
+      } 
+
+    Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+    mail.setFileAttachments(emailFileAttachments);
+    mail.setToAddresses(toAddresses);
+    mail.setSubject(obj.template.subject);
+    mail.setHtmlBody(obj.template.htmlBody);
+    mail.saveAsActivity = false;
+    Messaging.SendEmailResult[] results = new List<Messaging.SendEmailResult>();
+    results = Messaging.sendEmail(new Messaging.Email[] {mail});
+
+    if(results[0].success){
+        //after success process               
+    } 
+    else {
+        throw new sendDocsToFundingSourceCTRLException('The email failed to send: ' + results[0].errors[0].message);
+    }
