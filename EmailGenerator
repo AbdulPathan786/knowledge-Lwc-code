@@ -1,0 +1,43 @@
+public with sharing class TPH_EmailGenerator {
+
+    private Map<String, Id> emailTemplateMap;
+    private OrgWideEmailAddress orgEmailAddress;
+
+    public TPH_EmailGenerator(List<String> templateName){
+        orgEmailAddress = [select Id from OrgWideEmailAddress WHERE Address = 'tapalliance@vmware.com'];
+        emailTemplateMap = new Map<String, Id>();
+        List<EmailTemplate> emailTemplates = [SELECT Id, DeveloperName FROM EmailTemplate WHERE DeveloperName IN: templateName];
+        if(emailTemplates.size() > 0){
+            for(EmailTemplate template: emailTemplates){
+                emailTemplateMap.put(template.DeveloperName, template.Id);
+            } 
+        }
+    }
+
+    public void sendEmail(String emailTemplateName, Map<Id, Id> targetObjectIdVsWhatId){
+        try{
+
+            List<Messaging.SingleEmailMessage> mails = new List<Messaging.SingleEmailMessage>();
+            
+            if(targetObjectIdVsWhatId.size() > 0 && String.isNotBlank(emailTemplateName)){
+                for(Id targetId : targetObjectIdVsWhatId.keySet()){
+
+                    Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+                    Id whatId = targetObjectIdVsWhatId.get(targetId);
+                    mail.setTargetObjectId(targetId);
+                    mail.setWhatId(whatId);
+                    mail.setOrgWideEmailAddressId(orgEmailAddress.Id);
+                    mail.setTemplateId(emailTemplateMap.get(emailTemplateName));
+                    System.debug('emailTemplateName ' + emailTemplateName + ' : ' + emailTemplateMap.get(emailTemplateName));
+                    mails.add(mail);
+  
+                }
+            }
+            Messaging.sendEmail(mails);
+
+        }catch(EmailException e){
+            System.debug('The following exception has occurred: ' + e.getMessage());
+        }
+        
+    }
+}
