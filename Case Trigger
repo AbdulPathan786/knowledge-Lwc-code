@@ -1,0 +1,239 @@
+/*
+Name        :    CaseTriggerHelper
+Date        :    10, January, 2018
+Author      :    Abdul Pathan
+Description :    This class used in  CaseTrigger Trigger.
+*/
+/*************CaseTrigger*******************************/
+trigger CaseTrigger on Case (after insert, before update, after update, after delete) {
+ //Added By : Aslam Bari on 17-Feb-2021 for calling methods for updateNFRAllocationProducts.
+    // This method used for update NFR Allocation Products records according to case quantity_request, Fullfilment_Date and Licence_Type and RecordType Fields from the TPH_NFR_Licence_Request api.
+    if(trigger.isAfter && trigger.isInsert ){
+        CaseTriggerHelper.afterInsert(trigger.new);
+    }
+    if(trigger.isBefore && trigger.isUpdate ){
+        CaseTriggerHelper.beforeUpdate(trigger.new, trigger.oldMap);
+    }
+    if(trigger.isAfter && trigger.isUpdate){
+        CaseTriggerHelper.afterUpdate(trigger.new, trigger.oldMap);
+    }
+    if(trigger.isAfter && trigger.isDelete){
+        CaseTriggerHelper.afterDelete(trigger.old, trigger.oldMap);
+    }
+}
+/**************************CaseTriggerHelper*****************************************************/
+public class CaseTriggerHelper{
+// Added by Aslam Bari on 18-Feb-2021 to calling after insert methods.
+    public static void afterInsert(List<Case> caseRecords){
+        Id licenseRequestRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('License_Request').getRecordTypeId();
+        Id addtionalNFRRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('Additional_NFR_Request').getRecordTypeId();
+        Set<Id> accountIds = new Set<Id>();
+        for(Case caseRec : caseRecords){
+            if((caseRec.RecordTypeId == licenseRequestRecordTypeId || caseRec.RecordTypeId == addtionalNFRRecordTypeId) && caseRec.License_Requested__c != null){
+                accountIds.add(caseRec.AccountId);
+            }
+        }
+        if(accountIds.size() > 0){
+            updateNFRAllocationProducts(accountIds);
+        }
+    }
+    
+    // Added by Aslam Bari on 18-Feb-2021 to calling after update methods.
+    public static void afterUpdate(List<Case> caseRecords, Map<Id, Case> oldMap){
+        Id licenseRequestRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('License_Request').getRecordTypeId();
+        Id addtionalNFRRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('Additional_NFR_Request').getRecordTypeId();
+        Set<Id> accountIds = new Set<Id>();
+        for(Case caseRec : caseRecords){
+            if((oldMap.get(caseRec.Id).Fulfillment_Date__c != caseRec.Fulfillment_Date__c
+                || oldMap.get(caseRec.Id).RecordTypeId != caseRec.RecordTypeId
+                || oldMap.get(caseRec.Id).License_Type__c != caseRec.License_Type__c
+                || oldMap.get(caseRec.Id).Quantity_Requested__c != caseRec.Quantity_Requested__c
+                || oldMap.get(caseRec.Id).License_Requested__c != caseRec.License_Requested__c
+                || oldMap.get(caseRec.Id).Status != caseRec.Status) 
+                && (caseRec.RecordTypeId == licenseRequestRecordTypeId || caseRec.RecordTypeId == addtionalNFRRecordTypeId)){
+                accountIds.add(caseRec.AccountId);
+            }
+        }
+        if(accountIds.size() > 0){
+            updateNFRAllocationProducts(accountIds);
+        }
+    }
+
+    // Added by Aslam Bari on 17-March-2021 to perform before update actions.
+    public static void beforeUpdate(List<Case> caseRecords, Map<Id, Case> oldMap){
+        Id licenseRequestRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('License_Request').getRecordTypeId();
+        Id addtionalNFRRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('Additional_NFR_Request').getRecordTypeId();
+        List<Case> casesForEntitlement = new List<Case>();
+        Set<Id> accountIdsForEntitlement = new Set<Id>();
+        Set<Id> contactIdsForEntitlement = new Set<Id>();
+        for(Case caseRec : caseRecords){
+            System.debug('These are case Records : '+caseRec.Contact);
+            if(oldMap.get(caseRec.Id).Status != caseRec.Status 
+                && (caseRec.RecordTypeId == licenseRequestRecordTypeId || caseRec.RecordTypeId == addtionalNFRRecordTypeId)
+                && caseRec.Status.equals('Distribution Ready')){
+                casesForEntitlement.add(caseRec);
+                accountIdsForEntitlement.add(caseRec.AccountId);
+                contactIdsForEntitlement.add(caseRec.ContactId);
+            }
+        }
+        if(casesForEntitlement.size() > 0){
+            createEntitlementRecords(casesForEntitlement, accountIdsForEntitlement, contactIdsForEntitlement);
+        }
+    }
+
+    // Added by Aslam Bari on 17-March-2021 to set Entitlement record after status changes to 'Distribution Ready'.
+    public static void createEntitlementRecords(List<Case> cases, Set<Id> accountIdsForEntitlment, Set<Id> contactIdsForEntitlement){
+        Id entitlementRecordTypeId = Schema.SObjectType.Entitlement__c.getRecordTypeInfosByDeveloperName().get('TAP_NFR_Order').getRecordTypeId();
+        fillPRDForAccountMap(accountIdsForEntitlment);
+        fillContactMapForEntitlement(contactIdsForEntitlement);
+        fillPrimaryContactMapForEntitlement(accountIdsForEntitlment);
+        Map<Id,Entitlement__c> entitlements = new Map<Id,Entitlement__c>();
+        for(Case caseRecord : cases){
+            Entitlement__c entitlement = new Entitlement__c();
+            entitlement.RecordTypeId = entitlementRecordTypeId;
+            entitlement.Account__c = caseRecord.AccountId;
+            entitlement.Entitlement_Status__c = 'In Progress';
+            entitlement.Primary_Contact_Name__c = caseRecord.ContactId;
+            if(contactMapForEntitlement.size() > 0 && contactMapForEntitlement.containsKey(caseRecord.ContactId)){
+                //entitlement.License_Adminstrator_Name__c = contactMapForEntitlement.get(caseRecord.ContactId).Name;
+                entitlement.Support_Admin__c = contactMapForEntitlement.get(caseRecord.ContactId).Name;
+                entitlement.Procurement_User_Name__c = contactMapForEntitlement.get(caseRecord.ContactId).Name;
+                entitlement.Support_Admin_Email__c = contactMapForEntitlement.get(caseRecord.ContactId).Email;
+                entitlement.Super_User__c = contactMapForEntitlement.get(caseRecord.ContactId).Name;
+                entitlement.Super_User_Email1__c = contactMapForEntitlement.get(caseRecord.ContactId).Email;
+                //entitlement.LA_PC_User_ID__c  = contactMapForEntitlement.get(caseRecord.ContactId).PC_User_ID__c;
+            }
+            if(primaryContactMapForEntitlement.size() > 0 && primaryContactMapForEntitlement.containsKey(caseRecord.AccountId)){
+                entitlement.VMStar_LA_Full_ID_S2S__c = primaryContactMapForEntitlement.get(caseRecord.AccountId).Full_VMstar_ID__c;
+                entitlement.License_Adminstrator_Name__c = primaryContactMapForEntitlement.get(caseRecord.AccountId).Name;
+                entitlement.License_Adminstrator_Email__c = primaryContactMapForEntitlement.get(caseRecord.AccountId).Email;    
+            }
+            if(prdForAccountMap.size() > 0 && prdForAccountMap.containsKey(caseRecord.AccountId))
+                entitlement.Program_Details__c = prdForAccountMap.get(caseRecord.AccountId).Id;
+            entitlement.NFR_Bundle__c = caseRecord.SKU__c + ',' + caseRecord.Quantity_Requested__c + ',' + caseRecord.SUB_case__c + ',' + caseRecord.Quantity_Requested__c;
+            entitlements.put(caseRecord.Id, entitlement);
+        }
+        if(entitlements.values().size() > 0){
+            insert entitlements.values();
+            linkEntitlementToCase(entitlements, cases);
+        }
+    }
+
+    // Added by Aslam Bari on 17-March-2021 to link entitlement record to its case.
+    public static void linkEntitlementToCase(Map<Id,Entitlement__c> entitlements, List<Case> cases){
+        for(Case caseRecord : cases){
+            if(entitlements.containsKey(caseRecord.Id)){
+                caseRecord.Entitlement_Record__c = entitlements.get(caseRecord.Id).Id;
+            }
+        }
+    }
+
+    // Added by Aslam Bari on 17-March-2021 to sfill AccountIds Map for Entitlement record after status changes to 'Distribution Ready'.
+    public static void fillPRDForAccountMap(Set<Id> accountIdsForEntitlment){
+        List<Program_Details__c> programDetails = [SELECT Id,Account_Name_c__c  FROM Program_Details__c WHERE Account_Name_c__c IN : accountIdsForEntitlment AND IsActive__c = true];
+        prdForAccountMap = new Map<Id,Program_Details__c>();
+        for(Program_Details__c programDetail : programDetails){
+            if(!prdForAccountMap.containsKey(programDetail.Account_Name_c__c)){
+                prdForAccountMap.put(programDetail.Account_Name_c__c, programDetail);
+            }
+        }
+    }
+
+    // Added by Aslam Bari on 17-March-2021 to fill Contact Map for Entitlement record after status changes to 'Distribution Ready'.
+    public static void fillContactMapForEntitlement(Set<Id> contactIdsForEntitlement){
+        contactMapForEntitlement = new Map<Id,Contact>([Select Id, PC_User_ID__c, Name, Email From Contact where Id IN : contactIdsForEntitlement]);
+    }
+
+    // Added by Aslam Bari on 25-May-2021 to fill Primary Contact Map for Entitlement record after status changes to 'Distribution Ready'.
+    public static void fillPrimaryContactMapForEntitlement(Set<Id> accountsIdsForEntitlement){
+        List<Contact> contacts = [Select Id, Name, Email, Full_VMstar_ID__c, AccountId From Contact where AccountId IN : accountsIdsForEntitlement And TAP_Primary_Contact__c = true];
+        primaryContactMapForEntitlement = new Map<Id,Contact>();
+        If(contacts.size() > 0){
+            for(Contact contactRec : contacts){
+                primaryContactMapForEntitlement.put(contactRec.AccountId, contactRec);
+            }
+        }
+    }
+
+    // Added by Aslam Bari on 24-Feb-2021 to calling after delete methods.
+    public static void afterDelete(List<Case> caseRecords, Map<Id, Case> oldMap){
+        Id licenseRequestRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('License_Request').getRecordTypeId();
+        Id addtionalNFRRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('Additional_NFR_Request').getRecordTypeId();
+        Set<Id> accountIds = new Set<Id>();
+        for(Case caseRec : caseRecords){
+          if((caseRec.RecordTypeId == licenseRequestRecordTypeId || caseRec.RecordTypeId == addtionalNFRRecordTypeId)
+           && caseRec.License_Requested__c != null){
+            accountIds.add(caseRec.AccountId);
+          }
+        }
+        if(accountIds.size() > 0){
+            updateNFRAllocationProducts(accountIds);
+        }
+    }
+    
+    //Added By : Aslam Bari on 17-Feb-2021 to Update NFR Allocation Products records according to case values.
+    public static void updateNFRAllocationProducts(Set<Id> accountIds){
+        Id licenseRequestRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('License_Request').getRecordTypeId();
+        Id addtionalNFRRecordTypeId = Schema.SObjectType.Case.getRecordTypeInfosByDeveloperName().get('Additional_NFR_Request').getRecordTypeId();
+        if(accountIds.size() > 0){
+           AggregateResult[] productFulfilledQuantity = [SELECT AccountId, License_Requested__c, SUM(Quantity_Requested__c) sumQtyRequested
+                                                  FROM Case
+                                                  WHERE AccountId IN : accountIds 
+                                                    AND (RecordTypeId =: licenseRequestRecordTypeId OR RecordTypeId =: addtionalNFRRecordTypeId) 
+                                                    AND License_Type__c = 'NFR'
+                                                    AND License_Requested__c != null
+                                                    AND Fulfillment_Date__c != null
+                                                    AND Status != 'Rejected'
+                                                    AND Status != 'Pending Rejected'
+                                                  GROUP BY AccountId, License_Requested__c];
+          AggregateResult[] productPendingQuantity = [SELECT AccountId, License_Requested__c, SUM(Quantity_Requested__c) sumQtyRequested
+                                                          FROM Case
+                                                          WHERE AccountId IN : accountIds 
+                                                            AND (RecordTypeId =: licenseRequestRecordTypeId OR RecordTypeId =: addtionalNFRRecordTypeId) 
+                                                            AND License_Type__c = 'NFR'
+                                                            AND License_Requested__c != null
+                                                            AND Fulfillment_Date__c = null
+                                                            AND Status != 'Rejected'
+                                                            AND Status != 'Pending Rejected'
+                                                          GROUP BY AccountId, License_Requested__c];
+           
+           Map<String, NFR_Allocation_Product__c> nfrAllocationProductMap = new Map<String, NFR_Allocation_Product__c>();
+           for(NFR_Allocation_Product__c allocationProduct :[SELECT Id, NFR_Allocation__r.account__c, Pending_Quantity__c, Available_Quantity__c, Fulfilled_Quantity__c, Entitled_Quantity__c,
+                                                                    License_Product__c 
+                                                                    FROM  NFR_Allocation_Product__c
+                                                                    Where NFR_Allocation__r.account__c IN : accountIds]){
+                                                                    
+                          allocationProduct.Fulfilled_Quantity__c =  0;
+                          allocationProduct.Pending_Quantity__c =  0;
+                          nfrAllocationProductMap.put(allocationProduct.NFR_Allocation__r.account__c + '' + allocationProduct.License_Product__c, allocationProduct);                                          
+           }
+
+            for(AggregateResult productRec : productFulfilledQuantity){
+                NFR_Allocation_Product__c allocationProductRec = nfrAllocationProductMap.get(String.valueOf(productRec.get('AccountId')) + '' + String.valueOf(productRec.get('License_Requested__c')));
+                if(allocationProductRec != null)
+                    allocationProductRec.Fulfilled_Quantity__c = Integer.valueOf(productRec.get('sumQtyRequested'));
+            }
+            
+            for(AggregateResult productRec : productPendingQuantity){
+                NFR_Allocation_Product__c allocationProductRec = nfrAllocationProductMap.get(String.valueOf(productRec.get('AccountId')) + '' + String.valueOf(productRec.get('License_Requested__c')));
+                if(allocationProductRec != null)
+                    allocationProductRec.Pending_Quantity__c = Integer.valueOf(productRec.get('sumQtyRequested'));
+            }
+       
+            
+            if(nfrAllocationProductMap.size() > 0){
+                UPDATE nfrAllocationProductMap.values();
+            }
+        }  
+    }
+    
+    /* Added By: Aslam Bari, Date - 7/7/2021
+     * Description: On case status gets approved, make carbon black create user callouts for each contact related to case
+     */
+     @InvocableMethod(callout=true)
+      public static void makeCreateUserCallouts(List<Id> contactIds) {
+          for(Id contactId : contactIds){
+              TPH_CarbonBlackCallouts.createUserCallout(contactId);
+          }
+      }
+}
