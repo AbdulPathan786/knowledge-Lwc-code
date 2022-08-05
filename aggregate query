@@ -1,0 +1,106 @@
+/*
+  Trigger Condition
+*/
+
+if(trigger.isAfter && (trigger.isInsert || trigger.isUpdate)){
+   // DocuSignTriggerHelper.onAfterInsertOrUpdate(trigger.new, trigger.oldMap, trigger.isUpdate);
+    EquipmentTriggerHelper.afterInsertEquipmentUpfrontSalesTaxAndFinancedField(trigger.new);
+    EquipmentTriggerHelper.afterUpdateEquipmentUpfrontSalesTaxAndFinancedField(trigger.new, trigger.oldMap);
+  }
+if(trigger.isAfter && trigger.isDelete ){
+    EquipmentTriggerHelper.afterDelete(trigger.old, trigger.oldMap);
+}
+
+
+  //Added 28/07/2022 | Ticket #1043 | iBirds
+  // If Equipment records (field: Upfront Sales Tax & Upfront Sales Tax Financed) are Insert, application records (field: Total Upfront Tax & Total Upfront Tax Financed) are updated automatically. 
+  public static void afterInsertEquipmentUpfrontSalesTaxAndFinancedField(List<ntportal__Equipment__c> equipmentList){
+      Set<String> applicationIds = new Set<String>();
+      if(equipmentList.size() > 0){
+          for(ntportal__Equipment__c equipment: equipmentList) {
+              if(equipment.ntportal__Upfront_Sales_Tax__c != null || equipment.ntportal__Upfront_Sales_Tax_Financed__c != null){
+                  applicationIds.add(equipment.ntportal__Application__c);
+              }
+          }//for
+      }//if
+      if(applicationIds.size() > 0){
+          CalculateApplicationTotalUpfrontTaxAndFinancedField(applicationIds);
+      }
+  }
+  //Added 28/07/2022 | Ticket #1043 | iBirds
+  // If Equipment records (field: Upfront Sales Tax & Upfront Sales Tax Financed) are updated, application records (field: Total Upfront Tax & Total Upfront Tax Financed) are updated automatically.
+  public static void afterUpdateEquipmentUpfrontSalesTaxAndFinancedField(List<ntportal__Equipment__c> equipmentList, Map<Id, ntportal__Equipment__c> oldMap){
+      Set<String> applicationIds = new Set<String>();
+      if(equipmentList.size() > 0){
+          for(ntportal__Equipment__c equipment: equipmentList) {
+              if(oldMap != null && oldMap.get(equipment.Id).ntportal__Upfront_Sales_Tax__c != equipment.ntportal__Upfront_Sales_Tax__c ){
+                  applicationIds.add(equipment.ntportal__Application__c);
+              }
+              if(oldMap != null && oldMap.get(equipment.Id).ntportal__Upfront_Sales_Tax_Financed__c != equipment.ntportal__Upfront_Sales_Tax_Financed__c ){
+                  applicationIds.add(equipment.ntportal__Application__c);
+              }
+          }//for
+      }//if
+      if(applicationIds.size() > 0){
+          CalculateApplicationTotalUpfrontTaxAndFinancedField(applicationIds);
+      }
+  }
+  // Added by iBirds on 08 AUG 2022 to calling after delete methods. 
+  public static void afterDelete(List<ntportal__Equipment__c> equipmentRecords, Map<Id, ntportal__Equipment__c> oldMap){
+      Set<String> applicationIds = new Set<String>();
+      for(ntportal__Equipment__c equipmentRecs : equipmentRecords){
+          if(equipmentRecs.ntportal__Application__c != null){
+              applicationIds.add(equipmentRecs.ntportal__Application__c);
+          }
+      }
+      if(applicationIds.size() > 0){
+          CalculateApplicationTotalUpfrontTaxAndFinancedField(applicationIds);
+      }
+  }
+  //Added 01/06/2022 | Ticket #1043 | iBirds
+  public static void CalculateApplicationTotalUpfrontTaxAndFinancedField(Set<String> setOfApplicationIds) {
+      Map<Id, Decimal> mapOfApplicationIdAndTotalUpfrontTax = new Map<Id, Decimal>();
+      Map<String, Decimal> mapOfApplicationIdAndTotalUpfrontTaxFinanced = new Map<String, Decimal>();
+      List<ntportal__Application__c> updateApplicationRecords = new List<ntportal__Application__c>();
+
+      if(setOfApplicationIds.size() > 0){
+          List<ntportal__Equipment__c> equipmentRecords = [SELECT Id, Name, ntportal__Application__c, ntportal__Upfront_Sales_Tax__c, ntportal__Upfront_Sales_Tax_Financed__c
+                                                           FROM ntportal__Equipment__c
+                                                           WHERE ntportal__Application__c IN: setOfApplicationIds
+                                                          ];
+          if(equipmentRecords.size() > 0){
+              for (ntportal__Equipment__c equipment: equipmentRecords) {
+                  //Total Upfront Tax Field
+                  if (mapOfApplicationIdAndTotalUpfrontTax.containsKey(equipment.ntportal__Application__c)) {
+                      Decimal totalUpfrontTax = mapOfApplicationIdAndTotalUpfrontTax.get(equipment.ntportal__Application__c) + (equipment.ntportal__Upfront_Sales_Tax__c == null ? 0 : equipment.ntportal__Upfront_Sales_Tax__c);
+                      mapOfApplicationIdAndTotalUpfrontTax.put(equipment.ntportal__Application__c, totalUpfrontTax);
+                  } else{
+                      mapOfApplicationIdAndTotalUpfrontTax.put(equipment.ntportal__Application__c, (equipment.ntportal__Upfront_Sales_Tax__c == null ? 0 : equipment.ntportal__Upfront_Sales_Tax__c));
+                  }
+                  //Total Upfront Tax Financed Field
+                  if(equipment.ntportal__Upfront_Sales_Tax_Financed__c == true){
+                      if (mapOfApplicationIdAndTotalUpfrontTaxFinanced.containsKey(equipment.ntportal__Application__c)) {
+                          Decimal totalUpfrontTaxFinanced = mapOfApplicationIdAndTotalUpfrontTaxFinanced.get(equipment.ntportal__Application__c) + (equipment.ntportal__Upfront_Sales_Tax__c == null ? 0 : equipment.ntportal__Upfront_Sales_Tax__c);
+                          mapOfApplicationIdAndTotalUpfrontTaxFinanced.put(equipment.ntportal__Application__c, totalUpfrontTaxFinanced);
+                      } else {
+                          mapOfApplicationIdAndTotalUpfrontTaxFinanced.put(equipment.ntportal__Application__c, (equipment.ntportal__Upfront_Sales_Tax__c == null ? 0 : equipment.ntportal__Upfront_Sales_Tax__c));
+                      }
+                  }//if
+              }//for
+          }//if
+          List <ntportal__Application__c > applicationRecords = [SELECT Id, ntportal__Total_Upfront_Tax__c, ntportal__Total_Upfront_Tax_Financed__c
+                                                                 FROM ntportal__Application__c
+                                                                 WHERE Id IN: mapOfApplicationIdAndTotalUpfrontTax.keySet()
+                                                                ];
+          for(ntportal__Application__c application: applicationRecords){
+              application.ntportal__Total_Upfront_Tax__c = mapOfApplicationIdAndTotalUpfrontTax.get(application.Id);
+              application.ntportal__Total_Upfront_Tax_Financed__c = mapOfApplicationIdAndTotalUpfrontTaxFinanced.get(application.Id);
+              updateApplicationRecords.add(application);
+          }//for
+      }//if
+
+      if(updateApplicationRecords.size() > 0){
+          Update updateApplicationRecords;
+      }
+  }
+    
