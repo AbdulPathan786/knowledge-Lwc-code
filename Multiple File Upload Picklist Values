@@ -1,0 +1,126 @@
+ /**
+ * @author Abdul Pathan
+*  @CreatedOn :  16 Aug, 2022
+*  @Description: Multiple file uploads in file name according to auto-select picklist values
+*/
+/******************Apex Class commen*************************************************************/
+public class TC_Utility {
+    @AuraEnabled
+    public static List<FileWrapper> getDefaultCategory (String fileJSON) {
+        try {
+            List<FileWrapper>  files = (List<FileWrapper>) JSON.deserialize(fileJSON, List<FileWrapper>.class);
+            
+            List<TC_Origination__Category_With_File_Mapping__mdt> categoryWithFileMappingList = TC_Origination__Category_With_File_Mapping__mdt.getAll().values();
+            
+            Map<String, TC_Origination__Category_With_File_Mapping__mdt> categoryMappingMap = new  Map<String, TC_Origination__Category_With_File_Mapping__mdt>();
+            if(categoryWithFileMappingList != null && !categoryWithFileMappingList.isEmpty()){
+                for(TC_Origination__Category_With_File_Mapping__mdt cwfm : categoryWithFileMappingList){
+                    categoryMappingMap.put(cwfm.TC_Origination__Potential_Category__c, cwfm);
+                }
+            }
+            
+            Map<String, List<String>> categoryWithFilenameMap = new Map<String, List<String>>();
+            
+            Schema.DescribeFieldResult F = TC_Origination__Checklist_Item_with_Attachments__c.TC_Origination__File_s_Category__c.getDescribe();
+            List <Schema.PicklistEntry> pickVals = F.getPicklistValues(); 
+            
+            String defaultCategory = '';
+            for (Schema.PicklistEntry pv: pickVals) {
+                
+                if(categoryMappingMap.containsKey(pv.getValue())){
+                    String fileNames = categoryMappingMap.get(pv.getValue()).TC_Origination__File_Names__c;
+                    if(String.isNotBlank(fileNames)){
+                        List<String> matchingFileNameList = new List<String>();
+                        for(String name : fileNames.split(',')){
+                            matchingFileNameList.add(name.trim().toLowerCase());
+                        }
+                        categoryWithFilenameMap.put(pv.getValue(), matchingFileNameList);
+                    }
+                }
+                if (pv.isDefaultValue()) {
+                    defaultCategory = pv.getValue();
+                }    
+            }
+            
+            if(files != null && !files.isEmpty()){
+                for(FileWrapper file : files){
+                    String FILE_NAME = file.name.toLowerCase();
+                    for(String categoryName :categoryWithFilenameMap.keySet()){
+                        for(String matchingFileName : categoryWithFilenameMap.get(categoryName)){
+                            if(FILE_NAME.startsWithIgnoreCase(matchingFileName) || FILE_NAME.equalsIgnoreCase(matchingFileName) || FILE_NAME.equalsIgnoreCase(categoryName.toLowerCase())){
+                                file.category = categoryName;
+                            }
+                        }
+                    }
+                    if(String.isBlank(file.category)){
+                        file.category = defaultCategory;
+                    }
+                }
+            }
+            
+            return files;
+        } catch (Exception e) {
+            System.debug('ERROR : ' + e.getMessage());
+            throw new AuraHandledException( e.getMessage());    
+        }
+    }
+    
+    public class FileWrapper{
+        @AuraEnabled public Integer uid;
+        @AuraEnabled public String name;
+        @AuraEnabled public String category;
+    }
+    
+}
+ 
+/***************Apex Class*************************************************************************/
+
+public with sharing class BoxFileUploadController{
+ //Update on 16 Aug, 2022 
+  @AuraEnabled
+  public static List<TC_Utility.FileWrapper> getDefaultCategory (String fileJSON) {
+      return	TC_Utility.getDefaultCategory(fileJSON);
+  }
+}
+ 
+ /*****************Aura Component***********************************************************************/
+ 
+else if (cmp.get('v.requireBoxFileCategory')) {
+          let files = event.getSource().get('v.files');
+          cmp.set('v.files', files);
+
+           console.log('files', files);
+
+          let allFiles = [];
+          for (let i = 0; i < files.length; i++) {
+              let uid = Math.floor(Math.random() * 10000);
+              allFiles.push({ uid, 
+                             name :  files[i].name,
+                             category : ''
+                            });
+              files[i].uid = uid;
+          }
+
+          console.log('allFiles', allFiles);
+
+          let action = cmp.get('c.getDefaultCategory');
+
+          action.setParams({ fileJSON : JSON.stringify(allFiles) });
+
+          action.setCallback(this, function (result) {
+              console.log('###result', result);
+               console.log('###result__s', result.getReturnValue());
+              let categoryWithFileNames = result.getReturnValue();
+              for (let i = 0; i < files.length; i++) {
+                  let droppedFile = files[i];
+                  droppedFile.category = categoryWithFileNames.find(x => x.uid === droppedFile.uid).category;
+              }
+
+              cmp.set('v.isModalOpen', true);
+          });
+
+          $A.enqueueAction(action);
+}
+     
+     
+     
