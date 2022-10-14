@@ -32,4 +32,19 @@ export default class CustomLookup extends LightningElement {
             console.log('OUTPUT : ', e);
         }
     }
+   
+    /**
+     * @description: fire custom event to send data parent component
+     */
+    notifyParentComponent() {
+        this.dispatchEvent(new CustomEvent('selectedemails', {
+            detail: {
+                emailAddress: this.emailAddress,
+            }
+        }));
+
+        this.dispatchEvent(new CustomEvent('selectedfundingsourcerecords', {
+            detail: { records: this.emailAddress }
+        }));
+    }
 }
