@@ -1,0 +1,12 @@
+<template>
+    <c-custom-lookup 
+        object-api-name="Account" 
+        field-api-name="Name" 
+        icon-name="standard:user"
+        sub-field-api-name="ntportal__Funding_Email__c" 
+        onselect={handleCustomerSelected}
+        placeholder="Search Lender Accounts" 
+        label="Existing Lender?" 
+        filter-condition="RecordType.Name ='Borrower' AND">
+    </c-custom-lookup> 
+</template>
