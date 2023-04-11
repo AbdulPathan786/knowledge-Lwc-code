@@ -1,0 +1,514 @@
+----------------------Page--------------------------------------------------------------
+<?php
+	$data = null;
+	$membershipcategoryData = !empty($categories) ? json_decode($categories) : '';;
+
+	$msg = !empty($_SESSION['message']) ? $_SESSION['message'] : '';
+	if (!empty($editcategory)) {
+			$editmembershipcategory =  json_decode($editcategory);
+			$result = $editmembershipcategory->records;
+			$data = count($result) > 0 ? $result[0] : null;
+	}
+	
+	$result = null;
+	if (!empty($editpackage)) {
+		$packageData =  json_decode($editpackage);
+		$result =  $packageData->records;
+	}
+	// echo "<pre>";
+	// var_dump($membershipcategoryData);exit;
+?>
+-------------------------------page details-----------------------------------------------------
+<?php if (!empty($vendorUserData)) { foreach ($vendorUserData->records as $row) { ?>
+
+	<td><?php echo $row->first_name.' '.$row->last_name; ?></td>
+	<td><a href="tel:<?php echo $row->contact_number; ?>"><?php echo $row->contact_number; ?></a></td>
+	<td><a href="mailto:<?php echo $row->email; ?>"><?php echo $row->email; ?></a></td>
+	<td><span class="title-case label label-<?php echo ($row->status === 'active') ? 'primary' : 'gray' ?>"><?php echo $row->status; ?></span></td>
+	<td><?php echo date("d M, Y", strtotime($row->offer_expiration_date)) ?></td>
+	<td class="text-right"><?php echo $row->validity; ?></td>
+	<td class="text-right">₹ <?php echo number_format((float)$row->original_amount, 2); ?></td>
+	<td><?php if ($row->document_url != null) : ?><a href="<?php echo $row->document_url; ?>" target="_blank">View</a><?php else : ?> <?php endif; ?></td>
+	<td>
+		<div class="action-btn btn-group">
+			<a class="dropdown-toggle" data-toggle="dropdown" style="color: #666666 !important;"><i class="fa fa-list"></i> <span class="caret"></span></a>
+			<ul class="dropdown-menu">
+				<li class="add-user-status" data-user-id="<?php echo $row->id ?>" data-user-status="<?php echo $row->status ?>"><a>Change Status</a></li>
+			</ul>
+		</div>
+	</td>
+	<td>
+		<?php if ($row->status === 'confirmed') : ?><span class="title-case label label-primary"><?php elseif ($row->status === 'cancelled') : ?>
+		<span class="title-case label label-danger"><?php else : ?><span class="title-case label label-gray"><?php endif; ?><?php echo $row->status; ?></span>
+	</td>
+	<td>
+		<div class="action-btn btn-group">
+			<a class="dropdown-toggle" data-toggle="dropdown" style="color: #666666 !important;"><i class="fa fa-list"></i> <span class="caret"></span></a>
+			<ul class="dropdown-menu">
+				<li> <a href="<?php echo base_url() ?>/bookings/view/<?php echo $row->id ?>">View</a></li>
+				<li class="booking-status" data-user-id="<?php echo $row->id ?>" data-booking-status="<?php echo $row->status ?>"><a>Change Status</a></li>
+			</ul>
+		</div>
+	</td>
+
+	<div class="form-group">
+		<label class="required">Status</label>
+		<select class="form-control" name="status">
+			<option value="">None</option>
+			<option value="Active" <?php if ($result != null && $result->status === 'active') echo 'selected'; ?>>Active</option>
+			<option value="Inactive" <?php if ($result != null && $result->status ==='inactive') echo 'selected'; ?>>Inactive</option>
+		</select>
+	</div>
+----------------------------button click----------------------------------------------------
+<script>
+$(document).ready(function() {
+	$(".booking-status").click(function() { 		//.booking-status button click name
+		$('#addBookingStatus').modal('show'); 		// Modal show
+		$('#addBookingStatus').modal('hide'); 		// Modal hide
+		let bookingStatus = $(this).attr("data-booking-status");
+		$(".modal-body #status").val(bookingStatus); 	// Modal value show //#status id name of input or select box
+	});
+});
+<script>
+--------------------------------modal open------------------------------------------------------------
+
+------------------------update record----------------------------------------------------------------
+public function updateFeedbackStatus(){
+	$inputJSON = $this->request->getJSON();
+	$recordId =  $this->request->getVar('id');
+	$response = perform_http_request('POST', '/feedback/' . $recordId, json_encode($inputJSON));
+	return json_encode($response);
+}
+
+public function changeUserStatus()	{
+	$recordId = $this->request->getVar('id');
+	$request_data = $this->request->getVar('userObj');
+	$response = perform_http_request('POST', '/users/' . $recordId,  json_encode($request_data));
+	return json_encode($response);
+}
+	
+<script>
+    let userObj;
+    let userId;
+    $(document).ready(function() {
+        $(".add-user-status").click(function() {
+            $('#addUserStatusModal').modal('show');
+
+            userId = $(this).attr("data-user-id");
+            userObj = {'id': $(this).attr("data-user-id"),'status': $(this).attr("data-user-status"),}
+            if (userObj.status === 'active') {
+                userObj.status = 'Inactive';
+            } else {
+                userObj.status = 'active';
+            }
+        });
+    });
+
+    $("#status-change").click(function() {
+        $("#spinner").removeClass("hidden");
+
+        $.ajax({
+            type: "POST",
+            url: "<?php echo base_url('/users/user_status');  ?>",
+            data: JSON.stringify({ id: userId,userObj: userObj}),
+            dataType: "json",
+            contentType: "application/json",
+            cache: false,
+        }).done(function(data) {
+            console.log("LINK_Complated", data);
+            console.log("LINK_StatusCode", data.status_code);
+            console.log("Result", JSON.parse(data.result));
+            if (data.status_code == 200) {
+                $('#addUserStatusModal').modal('hide');
+                $("#spinner").addClass("hidden");
+                window.location.reload();
+            }
+        }).fail(function(data) {
+            console.log("failure", data);
+			console.log("failure", data);
+        });
+
+    });
+</script>
+----------------------------delete Record---------------------------
+public function deleteFeedbackRecord(){
+	$recordId =  $this->request->getVar('id');
+	$response = perform_http_request('POST', '/feedback/delete/' . $recordId);
+	return json_encode($response);
+}
+<script>
+    $('.delete_btn').on('click', function() {
+        let element = $(this);
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "You want to delete this record?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, Delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                let obj = {
+                    id: $(this).attr("data-id")
+                }
+
+                $.ajax({
+                    type: "POST",
+                    url: "<?php echo base_url('/rules/delete'); ?>",
+                    data: JSON.stringify(obj),
+                    dataType: "json",
+                    contentType: "application/json",
+                    cache: false,
+                }).done(function(data) {
+                    console.log("Complated", data);
+                    console.log("StatusCode", data.status_code);
+                    console.log("Result", JSON.parse(data.result));
+                    if (data.status_code == 200) {
+                        console.log('sat', this);
+                        //$(rowId).remove();
+                        element.closest('tr').remove();
+                        //element.parent().remove();
+                    } else {
+                        $("#spinner").addClass("hidden");
+                    }
+                }).fail(function(data) {
+                    console.log("#failure", data);
+                    console.log("failure", data.responseText);
+                });
+                Swal.fire(
+                    'Delete record successfully!',
+                    'deleted'
+                )
+            }
+        })
+    });
+</script>
+---------------------------Form Validation------------------------------------------------
+<script>
+	$('.form-submit-button').click(function() {
+		if ($("#package-form").valid()) {
+			$("#spinner").removeClass("hidden")
+		}
+	});
+
+	// Form Validate | Start
+	let rules = {
+		name: {
+			required: true,
+			minlength: 3
+		},
+	};
+
+	$("#package-form").validate({
+		rules
+	});
+	// Form Validate | End 
+</script>
+------------------------------------------Error Message------------------------------------------
+<!-- START | ERROR MESSAGE -->
+<?php if (session()->getFlashdata('err_msg')) : ?>
+	<div class="col-lg-12">
+		<div class="alert alert-danger alert-dismissable">
+			<button aria-hidden="true" data-dismiss="alert" class="close" type="button">×</button>
+			<?= session()->getFlashdata('err_msg') ?>
+		</div>
+	</div>
+<?php endif; ?>
+<!-- END | ERROR MESSAGE -->
+--------------------------------routes----------------------------------------------------------------
+//Membership Routes
+$routes->group('membership', ['filter' => 'authGuard'], static function ($routes) {
+    //Category Routes
+    $routes->get('categories', 'MembershipConroller::categoriesView');
+    $routes->post('insert_category', 'MembershipConroller::insertCategory');
+    $routes->get('edit_category/(:num)', 'MembershipConroller::editCategory/$1');
+    $routes->post('update_category', 'MembershipConroller::updateCategory');
+    //Package Routes
+    $routes->get('packages', 'MembershipConroller::packageView');
+    $routes->get('add_package', 'MembershipConroller::AddPackage');
+    $routes->post('insert_package', 'MembershipConroller::insertPackage');
+    $routes->get('edit_package/(:num)', 'MembershipConroller::editPackage/$1');
+    $routes->post('update_package', 'MembershipConroller::updatePackage'); 
+});
+ -------------------------Controller-----------------------------------------------------------
+ <?php
+
+namespace App\Controllers;
+
+class ControllerName extends BaseController{
+    public function index(){
+        $get_endpoint = '/booking?property_id=18';	//API name
+        $response = perform_http_request('GET', $get_endpoint);
+        $data['bookings'] = $response['result']; 		//store data & send page
+        return $this->view('booking_page', $data);	// return page name
+    }		
+}
+------------
+ <?php
+
+namespace App\Controllers;
+
+class MembershipConroller extends BaseController{
+
+	//View Records
+	public function categoriesView(){
+		$response = perform_http_request('GET', '/membership/category');
+		$data['title'] = 'Membership Categories';
+		$data['categories'] = $response['result'];
+		return $this->view('membership_category', $data);
+	}
+	
+	//Insert Record
+	public function insertCategory(){
+		$session = session();
+		$data['title'] = 'Add Membership Category';
+		$request_data = [
+			'category_name' => $this->request->getVar('category_name'),
+			'status'  => $this->request->getVar('status')
+		];
+
+		$response = perform_http_request('POST', '/membership/category', json_encode($request_data));
+
+		//Heandle Server respose
+		$result = parseServerResponse($response);
+
+		if ($result['isSuccess']) {
+			$session->setFlashdata('msg', 'Category added successfully!');
+			return redirect()->to('/membership/categories'); // redirect main page
+		} else {
+			$session->set('store_form_values', $request_data); // keeping filled form field values after form errors 
+			$session->setFlashdata('err_msg', $result['message']);
+			return redirect()->to('/membership_category'); // redirect new insert page
+		}
+	}
+
+	// Edit Record
+	public function editCategory($id){
+		$response = perform_http_request('GET', '/membership/category/' . $id);
+		$data['title'] = 'Update Category';
+		$data['editcategory'] = $response['result'];
+		return $this->view('/membership_category', $data);
+	}
+	
+	//Update Record
+	public function updateCategory(){
+		$session = session();
+		$recordId = $this->request->getVar('id');
+		$request_data = [
+			'id' => $recordId,
+			'category_name' => $this->request->getVar('category_name'),
+			'status'  => $this->request->getVar('status')
+		];
+
+		$response = perform_http_request('POST', '/membership/category/' . $recordId, json_encode($request_data));
+		$result = json_decode($response['result']);
+
+		//Heandle Server respose
+		$result = parseServerResponse($response);
+
+		if ($result['isSuccess']) {
+			$session->setFlashdata('msg', 'Category updated successfully!');
+			return redirect()->to('/membership/categories'); // redirect main page
+		} else {
+			$session->set('store_form_values', $request_data); // keeping filled form field values after form errors 
+			$session->setFlashdata('err_msg', $result['message']);
+			return redirect()->to('/membership/edit_category/' . $recordId); // redirect to edit page
+		}
+	}
+}
+----------------------------booking all details page--------------------------------------------------------
+ <?php
+namespace App\Controllers;
+class BookingController extends BaseController{
+    public function index()    {
+        //GET - list of booking
+        $get_endpoint = '/booking?property_id=18';
+        $response = perform_http_request('GET', $get_endpoint);
+        $data['bookings'] = $response['result'];
+        return $this->view('bookings', $data);
+    }
+    public function viewBooking($id)    {
+        $response = perform_http_request('GET', '/booking/' . $id);
+        $data['booking'] = $response['result'];
+        return $this->view('booking_view', $data);
+    }
+    public function updateBookingStatus()    {
+        $id = $this->request->getVar('id');
+        $inputJSON = $this->request->getVar('obj');
+        $response = perform_http_request('POST', '/booking/' . $id, json_encode($inputJSON));
+        return json_encode($response);
+    }
+}
+---------
+ <?php
+$bookingData = !empty($bookings) ? json_decode($bookings) : '';
+?>
+<div class="row wrapper border-bottom white-bg page-heading">
+    <div class="col-lg-10">
+        <h2>
+            Bookings
+        </h2>
+        <ol class="breadcrumb">
+            <li> <a href="/">Home</a> </li>
+            <li class="active"> <strong>Bookings</strong></li>
+        </ol>
+    </div>
+</div>
+
+<div class="wrapper wrapper-content animated fadeInRight">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="ibox float-e-margins">
+                <div class="ibox-title">
+                    <h5>All Bookings</h5>
+                </div>
+                <div class="ibox-content">
+
+                    <div class="table-responsive">
+                        <table class="table table-striped table-bordered table-hover basic-datatable" id="order_table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Booking Date</th>
+                                    <th>Checkin</th>
+                                    <th>Checkout</th>
+                                    <th>Booking Type</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (!empty($bookingData)) {
+                                    foreach ($bookingData->records as $row) { ?>
+                                        <tr class="gradeX">
+                                            <td>
+                                                <?php echo $row->first_name . ' ' . $row->last_name; ?>
+                                            </td>
+                                            <td>
+                                                <?php echo date("d M, Y", strtotime($row->booking_date)) ?>
+                                            </td>
+                                            <td>
+                                                <?php echo date("d M, Y", strtotime($row->checkin)) ?>
+                                            </td>
+                                            <td>
+                                                <?php echo date("d M, Y", strtotime($row->checkout)) ?>
+                                            </td>
+                                            <td> <?php echo $row->booking_type; ?> </td>
+                                            <td>
+                                                <?php if ($row->status === 'confirmed') : ?>
+                                                    <span class="title-case label label-primary">
+                                                    <?php elseif ($row->status === 'cancelled') : ?>
+                                                        <span class="title-case label label-danger">
+                                                        <?php else : ?>
+                                                            <span class="title-case label label-gray">
+                                                                <?php endif; ?><?php echo $row->status; ?></span>
+                                            </td>
+                                            <td>
+                                                <div class="action-btn btn-group">
+                                                    <a class="dropdown-toggle" data-toggle="dropdown" style="color: #666666 !important;">
+                                                        <i class="fa fa-list"></i> <span class="caret"></span>
+                                                    </a>
+                                                    <ul class="dropdown-menu">
+                                                        <li> <a href="<?php echo base_url() ?>/bookings/view/<?php echo $row->id ?>">View</a></li>
+                                                        <li class="booking-status" data-user-id="<?php echo $row->id ?>" data-booking-status="<?php echo $row->status ?>">
+                                                            <a>Change Status</a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                <?php }
+                                } ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Status Modal -->
+<div class="modal inmodal" id="addBookingStatus" tabindex="-1" role="dialog" aria-hidden="true">
+    <form id="news-form" role="form" method="post" enctype="multipart/form-data">
+        <div class="modal-dialog">
+            <div class="modal-content animated flipInY">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                    <h4 class="modal-title">Confirm</h4>
+                    <p class="font-bold text-danger">Are you sure to change booking status?</p>
+                </div>
+                <!-- body -->
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="required">Status</label>
+                        <select class="form-control" name="status" id="status">
+                            <!-- <option value="">None</option> -->
+                            <option value="confirmed">Confirmed</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="waiting">Waiting</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-white" data-dismiss="modal">Cancel</button>
+                    <button id="status-change" type="button" class="btn btn-primary">Confirm</button>
+                </div>
+
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    let bookingId;
+
+    $(document).ready(function() {
+
+        $(".booking-status").click(function() {
+            $('#addBookingStatus').modal('show');
+
+            bookingId = $(this).attr("data-user-id");
+            let bookingStatus = $(this).attr("data-booking-status");
+
+            $(".modal-body #status").val(bookingStatus);
+        });
+
+    });
+
+    $("#status-change").click(function() {
+        obj = {
+            'id': bookingId,
+            'status': $('#status').val(),
+        }
+
+        $("#spinner").removeClass("hidden");
+
+        $.ajax({
+            type: "POST",
+            url: "<?php echo base_url('/bookings/update');  ?>",
+            data: JSON.stringify({
+                id: bookingId,
+                obj: obj
+            }),
+            dataType: "json",
+            contentType: "application/json",
+            cache: false,
+        }).done(function(data) {
+            // console.log("LINK_Complated", data);
+            // console.log("LINK_StatusCode", data.status_code);
+            // console.log("Result", JSON.parse(data.result));
+            if (data.status_code == 200) {
+                $('#addBookingStatus').modal('hide');
+                $("#spinner").addClass("hidden")
+                window.location.reload();
+            }
+        }).fail(function(data) {
+            console.log("failure", data);
+            console.log("failure", data.responseText);
+        });
+
+    });
+</script>
+-------------------------------------------------------------------------
