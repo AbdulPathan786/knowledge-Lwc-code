@@ -1,0 +1,423 @@
+
+--------------------image show in table----------------------------------------------------------
+
+<td><img src="<?php echo base_url().'/public/'.$row->logo_url; ?>" class="rounded table-img-preview"
+  onerror="if (this.src != '<?=base_url()?>/public/uploads/images/no-image-preview.jpg') this.src = '<?=base_url()?>/public/uploads/images/no-image-preview.jpg';">
+</td>
+===============================================================================================================================================================
+---------------------------------------pdf and video add remove------------------------------------------------------
+
+<?php if (!empty($result)) { ?>
+  <input name="id" type="text" value="<?php if ($result != null) echo $result->id; ?>" class="hide">
+  <input name="old_file_url" type="text" value="<?php echo $result->document_url; ?>" class="hide" >
+  <input name="old_video_url" type="text" value="<?php echo $result->video_url; ?>" class="hide" >
+<?php } ?>
+
+ <!-- FILE UPLOADER START -->
+ <div class="row "> 
+  <div class="col-md-12">
+    <div class="form-group">
+      <label class="custom-file-label" for="uploadDocument">Attach Document</label>
+      <input type="file" accept=".pdf" name="userdocument" id="uploadDocument" class="form-control">
+      <p style="line-height: 3rem;">Accepted: PDF.</p>
+    </div>
+  </div>
+</div>
+<!-- FILE UPLOADER END -->
+
+<!-- FILE UPLOADER START -->
+<div class="row"> 
+  <div class="col-md-12">
+    <div class="form-group">
+      <label class="custom-file-label" for="uploadVideo">Attach video</label>
+      <input type="file" accept=".mp4" name="uploadVideo" id="uploadVideo" class="form-control">
+      <p style="line-height: 3rem;"><b>Accepted:</b> MP4 Max file size 1 GB and Video resolution of up to 1920 x 1080</p>
+    </div>
+  </div>
+</div>
+<!-- FILE UPLOADER END -->
+
+---------validation pdf and videos-----------
+
+public function updateCurrentAffairs(){
+    $session = session();
+    $data['title'] = 'Add Current Affairs';
+    $recordId = $this->request->getVar('id');
+    $request_data = [
+        'id' => $recordId,
+        'title' => $this->request->getVar('title'),
+        'type' => $this->request->getVar('type'),
+        'status' => $this->request->getVar('status')
+    ];
+    //For File
+    $img = $this->request->getFile('userdocument');
+    $video = $this->request->getFile('uploadVideo');
+
+    $validationRule = [];
+    $validateVideoRule = [];
+
+    if (!empty($img->getName())) {
+        $validationRule = [
+            'userdocument' => [
+                'label' => 'User File',
+                'rules' => [
+                    'uploaded[userdocument]',
+                    'mime_in[userdocument,application/pdf]',
+                ],
+            ],
+        ];
+
+        if (!$this->validate($validationRule)) {
+            //var_dump($this->validator->getErrors());
+            $session->set('store_form_values', $request_data); // keeping filled form field values 
+            $session->setFlashdata('err_msg', parent::$INVALID_FILE_UPLOAD_MESSAGE);
+            return redirect()->to('/currentaffairs/edit/' . $recordId);
+        }
+    }
+
+    if (!empty($video->getName())) {
+        $validateVideoRule = [
+            'uploadVideo' => [
+                'label' => 'User Video',
+                'rules' => [
+                    'uploaded[uploadVideo]',
+                    'mime_in[uploadVideo,video/mp4,video]',
+                ],
+            ],
+        ];
+
+        $getID3 = new getID3;
+        $file_info = $getID3->analyze($_FILES['uploadVideo']['tmp_name']);
+        $width = $file_info['video']['resolution_x'];
+        $height = $file_info['video']['resolution_y'];
+        //var_dump($width . 'x' . $height);exit;
+
+        if (($width > 1920) && ($height > 1080)) {
+            $session->set('store_form_values', $request_data); // keeping filled form field values 
+            $session->setFlashdata('err_msg', 'Invalid uploaded video resolution ' . $width . 'x' . $height . '');
+            return redirect()->to('/currentaffairs/edit/' . $recordId); // redirect to edit page
+        }
+
+        if (!$this->validate($validateVideoRule)) {
+            //var_dump($this->validator->getErrors());
+            $session->set('store_form_values', $request_data); // keeping filled form field values 
+            $session->setFlashdata('err_msg', parent::$INVALID_FILE_UPLOAD_MESSAGE);
+            return redirect()->to('/currentaffairs/edit/' . $recordId); // redirect to edit page
+        }
+    }
+
+    if (!empty($img->getName())) {
+        $oldFilePath = $this->request->getVar('old_file_url');
+        if (file_exists($oldFilePath)) {
+            unlink($oldFilePath); //remove old file
+        }
+
+        $newName = $img->getRandomName();
+        $img->move(ROOTPATH . 'public/uploads/current_affairs', $newName);
+
+        $request_data['document_name'] = $img->getClientName();
+        $request_data['document_url'] = 'uploads/current_affairs/' . $newName;
+    }
+
+    if (!empty($video->getName())) {
+        $oldVideoPath = $this->request->getVar('old_video_url');
+        if (file_exists($oldVideoPath)) {
+            unlink($oldVideoPath); //remove old file
+        }
+
+        $newName = $video->getRandomName();
+        $video->move(ROOTPATH . 'public/uploads/current_affairs', $newName);
+
+        $request_data['video_url'] = 'uploads/current_affairs/' . $newName;
+    }
+
+    $response = perform_http_request('POST', '/current_affairs/' . $recordId, json_encode($request_data));
+    $result = json_decode($response['result']);
+
+    //Heandle Server respose
+    $result = parseServerResponse($response);
+
+    if ($result['isSuccess']) {
+        $session->setFlashdata('msg', 'Current Affairs updated successfully!');
+        return redirect()->to('/currentaffairs'); // redirect main page
+    } else {
+        $session->set('store_form_values', $request_data); // keeping filled form field values after form errors 
+        $session->setFlashdata('err_msg', $result['message']);
+        return redirect()->to('/currentaffairs/edit/' . $recordId); // redirect to edit page
+    }
+}
+end---------
+ ==================================================================================================================================================================
+---------------------------------------------------------Categories image add and remove---------------------------------------------------------------------------
+<?php
+namespace App\Controllers;
+class CategoryController extends BaseController{
+    public function index(){
+      $response = perform_http_request('GET', '/category');
+      $data['category'] = $response['result']; 
+      return $this->view('category', $data);
+    }
+    public function addCategoryView(){
+      $data['title'] = 'Add Category';
+      return $this->view('add_category', $data);
+    }
+    public function insertCategory(){
+      $session = session();
+      $request_data = [
+              'name' => $this->request->getVar('name'),
+              'order_number'  => $this->request->getVar('order_number'),
+              'status'  => $this->request->getVar('status')
+          ];
+
+      //For File
+      $img = $this->request->getFile('file');
+      //$img_name =   $img->getName(); 
+
+      $validationRule = [];
+
+          if (!empty($img->getName()))  {
+
+              $validationRule = [
+              'file' => [
+                  'label' => 'Category File',
+                  'rules' => [
+                      'uploaded[file]', 
+                      'ext_in[file,png,jpg,gif]',
+                  ],
+              ],
+          ];
+
+          if (!$this->validate($validationRule)) { 
+              //var_dump($this->validator->getErrors());
+              $session->set('store_form_values', $request_data); // keeping filled form field values 
+              $session->setFlashdata('err_msg', parent::$INVALID_FILE_UPLOAD_MESSAGE); 
+              return redirect()->to('/category/add');
+          }
+        }
+
+        if(!empty($img->getName())){
+          $newName = $img->getRandomName();
+          $img->move(ROOTPATH . 'public/uploads/category', $newName);
+
+          $request_data['logo_url'] = 'uploads/category/'.$newName;
+        }
+
+        $response = perform_http_request('POST', '/category', json_encode($request_data));
+
+        //Heandle Server respose
+        $result = parseServerResponse($response);
+
+        if($result['isSuccess']){
+          $session->setFlashdata('msg', 'Category added successfully!');
+          return redirect()->to('/category'); // redirect main page
+        }else{
+          $session->set('store_form_values', $request_data); // keeping filled form field values after form errors 
+          $session->setFlashdata('err_msg', $result['message']);
+          return redirect()->to('/category/add'); // redirect new insert page
+        }
+     }
+    public function editCategory($id) {
+      $response = perform_http_request('GET', '/category/'.$id);
+      $data['title'] = 'Update Category';
+      $data['category'] = $response['result'];
+      return $this->view('add_category', $data);
+    }
+  
+    public function updateCategory() {
+      $session = session();
+      $recordId = $this->request->getVar('id');
+      $request_data = [
+        'id' => $recordId,
+              'name' => $this->request->getVar('name'),
+              'order_number'  => $this->request->getVar('order_number'),
+              'status'  => $this->request->getVar('status')
+          ]; 
+
+        //For File
+        $img = $this->request->getFile('file');
+        $validationRule = [];
+        if (!empty($img->getName()))  {
+            $validationRule = [
+                'file' => [
+                    'label' => 'Category File',
+                    'rules' => [
+                        'uploaded[file]', 
+                        'ext_in[file,png,jpg,gif]',
+                    ],
+                ],
+            ];
+
+            if (!$this->validate($validationRule)) { 
+                //var_dump($this->validator->getErrors());
+                $session->set('store_form_values', $request_data); // keeping filled form field values 
+                $session->setFlashdata('err_msg', parent::$INVALID_FILE_UPLOAD_MESSAGE); 
+                return redirect()->to('/category/edit/'.$recordId);
+            }
+        }
+
+        if(!empty($img->getName())){
+          $oldFilePath = $this->request->getVar('old_file_url');
+              if(file_exists($oldFilePath)){
+                unlink($oldFilePath); //remove old file
+              }
+          $newName = $img->getRandomName();
+          $img->move(ROOTPATH . 'public/uploads/category', $newName);
+          $request_data['logo_url'] = 'uploads/category/'.$newName;
+        }
+
+        $response = perform_http_request('POST', '/category/'.$recordId , json_encode($request_data));
+        $result = json_decode($response['result']); 
+
+        //Heandle Server respose
+        $result = parseServerResponse($response);
+
+        if($result['isSuccess']){
+          $session->setFlashdata('msg', 'Category updated successfully!');
+          return redirect()->to('/category'); // redirect main page
+        }else{
+          $session->set('store_form_values', $request_data); // keeping filled form field values after form errors 
+          $session->setFlashdata('err_msg', $result['message']);
+          return redirect()->to('/category/edit/'.$recordId); // redirect to edit page
+        }
+    }
+}
+----------------------------------------------------------------categories page edit and add----------------------------------------------------------------
+<?php  
+  $result = null;
+  if(!empty($category)){
+      $data =  json_decode($category);
+      $result =  $data->records;
+  } 
+?>
+
+<div class="row wrapper border-bottom white-bg page-heading">
+  <div class="col-lg-10">
+      <h2><?php echo $title; ?> </h2>
+      <ol class="breadcrumb">
+          <li><a href="<?=base_url()?>/home">Home</a></li>
+          <li><a>Categories</a></li>
+          <li class="active"><strong><?php echo $title; ?></strong></li>
+      </ol>
+  </div>
+</div>
+
+<div class="wrapper wrapper-content animated fadeInRight">
+    <div class="row">
+
+      <!-- START | ERROR MESSAGE -->
+      <?php if(session()->getFlashdata('err_msg')):?>
+      <div class="col-lg-12">
+          <div class="alert alert-danger alert-dismissable">
+              <button aria-hidden="true" data-dismiss="alert" class="close" type="button">×</button>
+              <?= session()->getFlashdata('err_msg') ?>
+          </div>
+      </div>
+      <?php endif;?>
+      <!-- END | ERROR MESSAGE -->
+
+      <div class="col-lg-offset-3 col-lg-6">
+          <div class="ibox float-e-margins">
+              <div class="ibox-content">
+                  <div class="row">
+                      <div class="col-lg-12">
+
+                          <form id="category-form" role="form"
+                              action="<?php echo base_url(); if($result != null) echo '/category/update'; else echo '/category/insert';  ?>"
+                              method="post" enctype="multipart/form-data">
+
+                              <?php if(!empty($result)){ ?>
+                              <input name="id" type="text" value="<?php echo $result->id; ?>" class="hide">
+                              <input name="old_file_url" type="text" value="<?php echo $result->logo_url; ?>" class="hide"><?php } ?>
+
+                              <div class="form-group">
+                                  <label class="required">Category Name</label>
+                                  <input name="name" type="text"value="<?php if($result != null) echo $result->name; ?>" class="form-control">
+                              </div>
+                              <div class="form-group">
+                                  <label class="required">Order Number</label>
+                                  <input name="order_number" type="number" value="<?php if($result != null) echo $result->order_number; ?>" class="form-control">
+                              </div>
+                              <div class="form-group">
+                                  <label class="required">Status</label>
+                                  <select class="form-control" name="status">
+                                      <option value="Active" <?php if($result !=null && $result->status === 'Active' ) echo 'selected'; ?>>Active</option>
+                                      <option value="Inactive" <?php if($result !=null && $result->status === 'Inactive' ) echo 'selected'; ?>>Inactive</option>
+                                  </select>
+                              </div>
+                              <!-- <div class="form-group">
+                                    <label>Description</label> 
+                                    <textarea class="form-control"></textarea>
+                                  </div> -->
+
+                              <!-- FILE UPLOADER START -->
+                              <div class="row m-t-lg m-b-md">
+                                  <div class="col-md-12">
+                                      <div class="form-group">
+                                          <label class="custom-file-label required" for="uploadFile">Category Logo</label>
+                                          <div class="file-input-box-container">
+                                              <div id="thumbnailImagePreview"></div>
+                                              <div class="file-input-box">
+                                                  <!-- <label class="custom-file-label" for="uploadFile">Category Logo</label> -->
+                                                  <input type="file" accept="image/*" name="file" id="uploadFile" class="form-control input-sm">
+                                                  <small style="line-height: 3rem;"><b>Accepted:</b> gif, png, jpg.
+                                                      Max file size 1 MB, Recommended image size: 128x128 pixels</small>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                              <!-- FILE UPLOADER END -->
+
+                              <div>
+                                  <button class="ladda-button btn btn-primary btn-block form-submit-button"
+                                      type="submit" data-style="zoom-out">
+                                      <?php echo ($result != null) ? 'Update':'Submit';  ?>
+                                  </button>
+                              </div>
+                          </form>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+
+        //Display Uploaded image 
+        <?php if (!empty($result)) { ?>
+            $("#thumbnailImagePreview").css("background-image", 'url("/sandbox/study_evaluation/public/<?php echo $result->logo_url; ?>")');
+        <?php } ?>
+
+            $('.form-submit-button').click(function () {
+                if ($("#category-form").valid()) {
+                    $("#spinner").removeClass("hidden")
+                }
+            });
+
+        // Form Validate | Start
+        let rules = {
+            name: {
+                required: true,
+                minlength: 3
+            },
+            order_number: {
+                required: true,
+                number: true
+            },
+            status: {
+                required: true
+            }
+        };
+        //Make file input required if id is null 
+        if (!$("input[name='id']").length) {
+            rules['file'] = { required: true };
+        }
+
+        $("#category-form").validate({ rules });
+        // Form Validate | End 
+    }); 
+</script>
+============================================================================================================================================
