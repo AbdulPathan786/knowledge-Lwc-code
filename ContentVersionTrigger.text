@@ -1,0 +1,44 @@
+--------------ContentVersionTrigger----------------------
+trigger ContentVersionTrigger on ContentVersion (After Insert) {
+    If(Trigger.isAfter && Trigger.isInsert){
+        ContentVersionTriggerHelper.onAfterInsert(trigger.new);
+    }
+}
+--------ContentVersionTriggerHelper---------------------
+public class ContentVersionTriggerHelper {
+    
+    public static void onAfterInsert(List<ContentVersion> contentVersionRecords){
+        Set<Id> contentVersionIds = new Set<Id>();
+        
+        if(!contentVersionRecords.isEmpty()){
+            for(ContentVersion cv: contentVersionRecords){
+               if (cv.Title.containsIgnoreCase('profile-logo')){
+                    contentVersionIds.add(cv.Id);
+               }
+            }
+            if(!contentVersionIds.isEmpty()){
+                generatePublicURL(contentVersionIds);
+            }
+        }
+    }
+    
+    private static void generatePublicURL(Set<Id> contentVersionIds){
+        List<ContentDistribution> contentDistributionList = new List<ContentDistribution>();
+        
+        for(Id contentVersionId : contentVersionIds){
+            ContentDistribution contentDistributionObj = new ContentDistribution();
+            contentDistributionObj.PreferencesAllowViewInBrowser = true;
+            contentDistributionObj.PreferencesLinkLatestVersion = false;
+            contentDistributionObj.PreferencesNotifyOnVisit = false;
+            contentDistributionObj.PreferencesPasswordRequired = false;
+            contentDistributionObj.PreferencesAllowOriginalDownload = true;
+            contentDistributionObj.ContentVersionId = contentVersionId;
+            contentDistributionObj.Name = 'External Link'+ contentVersionId;
+            contentDistributionList.add(contentDistributionObj);
+        }
+        if(contentDistributionList.size() > 0){
+            INSERT contentDistributionList;
+        }
+    }
+}
+----------------------------END----------------------------------------------
