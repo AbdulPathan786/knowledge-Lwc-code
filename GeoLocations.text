@@ -1,0 +1,70 @@
+--------------------PropertyTrigger-----------------
+trigger PropertyTrigger on Property__c (after insert, after update) {
+    
+    If(Trigger.IsAfter){
+        for(Property__c propRec : Trigger.new){
+            if(Trigger.IsInsert){
+                   PropertyTriggerHelper.setGeoCodeOnProperty(propRec.Id);
+               }else if(Trigger.IsUpdate &&
+                        (propRec.Address__Street__s != trigger.oldmap.get(propRec.Id).Address__Street__s ||
+                         propRec.Address__StateCode__s != trigger.oldmap.get(propRec.Id).Address__StateCode__s ||
+                         propRec.Address__City__s != trigger.oldmap.get(propRec.Id).Address__City__s ||
+                         propRec.Address__PostalCode__s != trigger.oldmap.get(propRec.Id).Address__PostalCode__s ||
+                         propRec.Address__CountryCode__s != trigger.oldmap.get(propRec.Id).Address__CountryCode__s)){
+                            PropertyTriggerHelper.setGeoCodeOnProperty(propRec.Id);
+                        }
+            
+        }
+    }
+    
+}
+-------PropertyTriggerHelper-----------------------------------
+public class PropertyTriggerHelper {
+    
+    @future (callout = true)
+    public static void setGeoCodeOnProperty(Id propertyRecId){
+        Property__c propRecord = [SELECT Id, Name, Address__c 
+                                  FROM Property__c 
+                                  WHERE Id = :propertyRecId];
+        
+        GeoCodeApiResult result = GeoLocationService.getLocationByAddress(propRecord.Address__c);
+        
+        System.debug('Mock Result --> '+JSON.serializePretty(result));
+        propRecord.Address__Latitude__s = result.results[0].geometry.location.lat;
+        propRecord.Address__Longitude__s = result.results[0].geometry.location.lng;
+        
+        update propRecord;
+        
+    }
+}
+-------GeoLocationService----------------------
+public class GeoLocationService {
+    public static GeoCodeApiResult getLocationByAddress(Address address){
+        
+        HttpRequest hr = new HttpRequest();
+        hr.setEndpoint('https://maps.googleapis.com/maps/api/geocode/json?address=' + EncodingUtil.urlEncode(formatAddress(address), 'UTF-8') + '&key=AIzaSyBZsH0US1O6fSogoqBTUpUkvEWqs-rYMlY');
+        hr.setMethod('GET');
+        
+        Http con = new http();
+        HttpResponse res = Test.isRunningTest()? new HttpResponse(): con.send(hr);
+        if(Test.isRunningTest()){
+            res.setHeader('Content-Type', 'application/json');
+            res.setBody('{"status" : "OK","results" : [ {"types" : [ "political", "sublocality", "sublocality_level_1" ],"place_id" : "ChIJi7oKRjDhazkRdFyhJCKrbNc","geometry" : {"viewport" : {        "southwest" : {          "lng" : 74.6496061,          "lat" : 26.41364        },        "northeast" : {          "lng" : 74.69422,          "lat" : 26.453403        }      },      "location_type" : "APPROXIMATE",      "location" : {        "lng" : 74.6722459,        "lat" : 26.4343408      },      "bounds" : {        "southwest" : {          "lng" : 74.6496061,          "lat" : 26.41364        },        "northeast" : {          "lng" : 74.69422,          "lat" : 26.453403        }      }    },    "formatted_address" : "Adarsh Nagar, Ajmer, Rajasthan, India",    "address_components" : [ {      "types" : [ "political", "sublocality", "sublocality_level_1" ],      "short_name" : "Adarsh Nagar",      "long_name" : "Adarsh Nagar"    }, {      "types" : [ "locality", "political" ],      "short_name" : "Ajmer",      "long_name" : "Ajmer"    }, {      "types" : [ "administrative_area_level_2", "political" ],      "short_name" : "Ajmer",      "long_name" : "Ajmer"    }, {      "types" : [ "administrative_area_level_1", "political" ],      "short_name" : "RJ",      "long_name" : "Rajasthan"    }, {"types" : [ "country", "political" ],"short_name" : "IN","long_name" : "India"} ] } ]}');
+            res.setStatusCode(200);
+        }
+        
+        String jsonRes = res.getBody(); //'{     "results": [         {             "address_components": [                 {                     "long_name": "Shastri Nagar",                     "short_name": "Shastri Nagar",                     "types": [                         "political",                         "sublocality",                         "sublocality_level_1"                     ]                 },                 {                     "long_name": "Ajmer",                     "short_name": "Ajmer",                     "types": [                         "locality",                         "political"                     ]                 },                 {                     "long_name": "Ajmer",                     "short_name": "Ajmer",                     "types": [                         "administrative_area_level_2",                         "political"                     ]                 },                 {                     "long_name": "Rajasthan",                     "short_name": "RJ",                     "types": [                         "administrative_area_level_1",                         "political"                     ]                 },                 {                     "long_name": "India",                     "short_name": "IN",                     "types": [                         "country",                         "political"                     ]                 },                 {                     "long_name": "305001",                     "short_name": "305001",                     "types": [                         "postal_code"                     ]                 }             ],             "formatted_address": "Shastri Nagar, Ajmer, Rajasthan 305001, India",             "geometry": {                 "bounds": {                     "northeast": {                         "lat": 26.490662,                         "lng": 74.65136009999999                     },                     "southwest": {                         "lat": 26.4787559,                         "lng": 74.64121109999999                     }                 },                 "location": {                     "lat": 26.4854722,                     "lng": 74.64663059999999                 },                 "location_type": "APPROXIMATE",                 "viewport": {                     "northeast": {                         "lat": 26.490662,                         "lng": 74.65136009999999                     },                     "southwest": {                         "lat": 26.4787559,                         "lng": 74.64121109999999                     }                 }             },             "place_id": "ChIJAX3A1VPmazkRc_3-K3CtP1c",             "types": [                 "political",                 "sublocality",                 "sublocality_level_1"             ]         }     ],     "status": "OK" }';
+        GeoCodeApiResult result = (GeoCodeApiResult) System.JSON.deserialize(jsonRes, GeoCodeApiResult.class);
+        return result;
+    }
+    
+    public static String formatAddress(Address address){
+        Set<String> tmp = New Set<String>{
+            address.getStreet(), address.getCity(), address.getStateCode(), address.getPostalCode(), address.getCountryCode()
+                };
+                    tmp.remove(null);
+        return string.join(New List<String>(tmp),',');
+    }
+    
+}
+----------END---------------------------------
